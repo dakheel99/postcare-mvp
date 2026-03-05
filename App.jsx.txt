@@ -1,0 +1,598 @@
+import { useState } from "react";
+
+const patients = [
+  {
+    id: 1, name: "محمد العتيبي", age: 52, surgery: "استئصال المرارة",
+    day: 3, phone: "0501234567", risk: "متوسط",
+    doctor: "د. سعد الغامدي", dept: "الجراحة العامة",
+    alerts: ["حرارة 38.2°م", "ألم متزايد في موضع الجرح"],
+    status: "تحذير", lastResponse: "منذ 4 ساعات",
+    vitals: { pain: 6, fever: 38.2, wound: "تورم خفيف", mobility: "محدودة" },
+    timeline: [
+      { day: 1, status: "✅", note: "حالة جيدة، ألم طبيعي" },
+      { day: 2, status: "✅", note: "تحسن ملحوظ" },
+      { day: 3, status: "⚠️", note: "ارتفاع حرارة وألم" },
+    ]
+  },
+  {
+    id: 2, name: "فاطمة الزهراني", age: 38, surgery: "استئصال الزائدة",
+    day: 7, phone: "0557654321", risk: "منخفض",
+    doctor: "د. نورة السبيعي", dept: "الجراحة العامة",
+    alerts: [],
+    status: "مستقر", lastResponse: "منذ ساعة",
+    vitals: { pain: 2, fever: 36.8, wound: "التئام جيد", mobility: "طبيعية" },
+    timeline: [
+      { day: 1, status: "✅", note: "بعد العملية بخير" },
+      { day: 3, status: "✅", note: "تعافٍ ممتاز" },
+      { day: 7, status: "✅", note: "شبه طبيعي" },
+    ]
+  },
+  {
+    id: 3, name: "خالد الدوسري", age: 65, surgery: "استبدال الركبة",
+    day: 5, phone: "0509876543", risk: "مرتفع",
+    doctor: "د. عبدالله المطيري", dept: "العظام",
+    alerts: ["لم يستجب منذ 12 ساعة", "مريض مزمن - سكري"],
+    status: "خطر", lastResponse: "منذ 12 ساعة",
+    vitals: { pain: 8, fever: 38.9, wound: "غير معروف", mobility: "غير معروفة" },
+    timeline: [
+      { day: 1, status: "✅", note: "استيقاظ من التخدير جيد" },
+      { day: 3, status: "⚠️", note: "ألم شديد" },
+      { day: 5, status: "🔴", note: "لا يوجد رد" },
+    ]
+  },
+  {
+    id: 4, name: "سارة القحطاني", age: 29, surgery: "استئصال كيس مبيضي",
+    day: 1, phone: "0543217890", risk: "منخفض",
+    doctor: "د. هناء الشمري", dept: "أمراض النساء",
+    alerts: [],
+    status: "جديد", lastResponse: "الآن",
+    vitals: { pain: 4, fever: 37.1, wound: "طبيعي", mobility: "محدودة" },
+    timeline: [
+      { day: 1, status: "✅", note: "اليوم الأول - متابعة" },
+    ]
+  },
+];
+
+const questions = {
+  1: [
+    "هل تشعر بألم شديد في مكان العملية؟ (من 1 إلى 10)",
+    "هل قست حرارتك؟ ما هي درجتها؟",
+    "هل لاحظت أي تورم أو احمرار في الجرح؟",
+    "هل تستطيع التنفس بشكل طبيعي؟",
+  ],
+  3: [
+    "هل لاحظت أي إفرازات من الجرح؟",
+    "هل تتناول مضادات الحيوية كما وصف الطبيب؟",
+    "ما درجة ألمك اليوم مقارنة بالأمس؟",
+    "هل استطعت المشي قليلاً؟",
+  ],
+  7: [
+    "هل الجرح يلتئم بشكل جيد في رأيك؟",
+    "هل تحتاج إلى مسكنات للألم؟",
+    "هل عدت لممارسة نشاطاتك اليومية؟",
+    "هل لديك أي قلق تود مشاركته مع الطبيب؟",
+  ],
+};
+
+const statusConfig = {
+  "مستقر": { bg: "bg-emerald-500/20", text: "text-emerald-400", border: "border-emerald-500/30", dot: "bg-emerald-400" },
+  "تحذير": { bg: "bg-amber-500/20", text: "text-amber-400", border: "border-amber-500/30", dot: "bg-amber-400" },
+  "خطر": { bg: "bg-red-500/20", text: "text-red-400", border: "border-red-500/30", dot: "bg-red-400" },
+  "جديد": { bg: "bg-blue-500/20", text: "text-blue-400", border: "border-blue-500/30", dot: "bg-blue-400" },
+};
+
+const riskConfig = {
+  "منخفض": "text-emerald-400 bg-emerald-500/10",
+  "متوسط": "text-amber-400 bg-amber-500/10",
+  "مرتفع": "text-red-400 bg-red-500/10",
+};
+
+export default function PostCareAI() {
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sentSuccess, setSentSuccess] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState("الكل");
+
+  const stats = {
+    total: patients.length,
+    stable: patients.filter(p => p.status === "مستقر").length,
+    warning: patients.filter(p => p.status === "تحذير").length,
+    danger: patients.filter(p => p.status === "خطر").length,
+  };
+
+  const filtered = patients.filter(p => {
+    const matchSearch = p.name.includes(searchTerm) || p.surgery.includes(searchTerm) || p.doctor.includes(searchTerm);
+    const matchFilter = filterStatus === "الكل" || p.status === filterStatus;
+    return matchSearch && matchFilter;
+  });
+
+  const handleSendFollowup = () => {
+    setShowSendModal(false);
+    setSentSuccess(true);
+    setTimeout(() => setSentSuccess(false), 3000);
+  };
+
+  return (
+    <div dir="rtl" className="min-h-screen bg-gray-950 text-white font-sans" style={{ fontFamily: "'Segoe UI', Tahoma, sans-serif" }}>
+
+      {/* Header */}
+      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-400 to-cyan-600 flex items-center justify-center text-lg font-bold shadow-lg">
+            🏥
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-white">رعاية ما بعد</h1>
+            <p className="text-xs text-gray-400">منصة متابعة ما بعد العملية الجراحية</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <div className="w-2 h-2 bg-red-500 rounded-full absolute -top-1 -right-1 animate-pulse"></div>
+            <button className="text-gray-400 hover:text-white text-xl">🔔</button>
+          </div>
+          <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-2">
+            <div className="w-7 h-7 bg-teal-500 rounded-full flex items-center justify-center text-xs font-bold">م</div>
+            <span className="text-sm text-gray-300">مدير الجودة</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
+            <span className="text-xs text-gray-400">مبادرة أمان — خيري</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <div className="bg-gray-900 border-b border-gray-800 px-6">
+        <div className="flex gap-1">
+          {[["dashboard", "📊 لوحة التحكم"], ["patients", "👥 المرضى"], ["messages", "💬 الرسائل"], ["reports", "📋 التقارير"]].map(([tab, label]) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-5 py-3 text-sm font-medium border-b-2 transition-all ${activeTab === tab
+                ? "border-teal-400 text-teal-400"
+                : "border-transparent text-gray-400 hover:text-gray-200"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-6 max-w-7xl mx-auto">
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          {[
+            { label: "إجمالي المرضى", value: stats.total, icon: "👥", color: "from-blue-600 to-blue-800", sub: "نشطون الآن" },
+            { label: "مستقرون", value: stats.stable, icon: "✅", color: "from-emerald-600 to-emerald-800", sub: "حالة جيدة" },
+            { label: "يحتاجون متابعة", value: stats.warning, icon: "⚠️", color: "from-amber-600 to-amber-800", sub: "تنبيهات مفعّلة" },
+            { label: "حالات طارئة", value: stats.danger, icon: "🚨", color: "from-red-600 to-red-800", sub: "تدخل فوري" },
+          ].map((s, i) => (
+            <div key={i} className={`bg-gradient-to-br ${s.color} rounded-2xl p-5 shadow-lg`}>
+              <div className="flex justify-between items-start mb-3">
+                <span className="text-3xl">{s.icon}</span>
+                <span className="text-4xl font-bold text-white">{s.value}</span>
+              </div>
+              <p className="text-white font-semibold text-sm">{s.label}</p>
+              <p className="text-white/60 text-xs mt-1">{s.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Alert Banner */}
+        {patients.some(p => p.status === "خطر") && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-6 flex items-center gap-3">
+            <span className="text-2xl">🚨</span>
+            <div className="flex-1">
+              <p className="text-red-400 font-semibold">تنبيه عاجل — مريض يحتاج تدخلاً فورياً</p>
+              <p className="text-red-300/70 text-sm">خالد الدوسري - لم يستجب منذ 12 ساعة - مريض مزمن عالي الخطورة</p>
+            </div>
+            <button
+              onClick={() => { setSelectedPatient(patients[2]); setActiveTab("patients"); }}
+              className="bg-red-500 hover:bg-red-600 text-white text-sm px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              عرض الحالة
+            </button>
+          </div>
+        )}
+
+        {/* Main Content */}
+        {activeTab === "dashboard" && (
+          <div className="grid grid-cols-3 gap-6">
+            {/* Patient List */}
+            <div className="col-span-2 bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+              <div className="p-5 border-b border-gray-800 flex justify-between items-center">
+                <h2 className="font-bold text-white">المرضى اليوم</h2>
+                <span className="text-xs text-gray-400 bg-gray-800 px-3 py-1 rounded-full">30 يوم متابعة</span>
+              </div>
+              <div className="divide-y divide-gray-800">
+                {patients.map(p => {
+                  const sc = statusConfig[p.status];
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => { setSelectedPatient(p); setActiveTab("patients"); }}
+                      className="p-4 hover:bg-gray-800/50 cursor-pointer transition-colors flex items-center gap-4"
+                    >
+                      <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl flex items-center justify-center text-sm font-bold shadow">
+                        {p.name[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-white text-sm">{p.name}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${riskConfig[p.risk]}`}>{p.risk}</span>
+                        </div>
+                        <p className="text-gray-400 text-xs truncate">{p.surgery} • اليوم {p.day} • {p.doctor}</p>
+                      </div>
+                      <div className="text-left flex flex-col items-end gap-1">
+                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${sc.bg} ${sc.text} ${sc.border}`}>
+                          <div className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}></div>
+                          {p.status}
+                        </div>
+                        <span className="text-gray-500 text-xs">{p.lastResponse}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Sidebar */}
+            <div className="flex flex-col gap-4">
+              {/* Quick Actions */}
+              <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
+                <h3 className="font-bold text-white mb-4 text-sm">إجراءات سريعة</h3>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { label: "إرسال متابعة جماعية", icon: "📤", color: "bg-teal-600 hover:bg-teal-700", action: () => setShowSendModal(true) },
+                    { label: "إضافة مريض جديد", icon: "➕", color: "bg-blue-600 hover:bg-blue-700", action: () => {} },
+                    { label: "تقرير اليوم", icon: "📊", color: "bg-purple-600 hover:bg-purple-700", action: () => setActiveTab("reports") },
+                  ].map((a, i) => (
+                    <button
+                      key={i}
+                      onClick={a.action}
+                      className={`${a.color} text-white text-sm px-4 py-3 rounded-xl font-medium transition-colors flex items-center gap-3 w-full`}
+                    >
+                      <span>{a.icon}</span>
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Timeline Today */}
+              <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
+                <h3 className="font-bold text-white mb-4 text-sm">نشاط اليوم</h3>
+                <div className="flex flex-col gap-3">
+                  {[
+                    { time: "08:00", event: "إرسال أسئلة اليوم 3 — محمد العتيبي", type: "send" },
+                    { time: "08:45", event: "رد المريض — فاطمة الزهراني ✅", type: "ok" },
+                    { time: "09:20", event: "تنبيه: حرارة مرتفعة — محمد العتيبي", type: "warn" },
+                    { time: "الآن", event: "خالد الدوسري لم يستجب 🔴", type: "danger" },
+                  ].map((e, i) => (
+                    <div key={i} className="flex gap-3 items-start">
+                      <span className="text-gray-500 text-xs w-12 shrink-0 mt-0.5">{e.time}</span>
+                      <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${e.type === "danger" ? "bg-red-400" : e.type === "warn" ? "bg-amber-400" : e.type === "ok" ? "bg-emerald-400" : "bg-blue-400"}`}></div>
+                      <span className="text-gray-300 text-xs leading-relaxed">{e.event}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Stats Mini */}
+              <div className="bg-gradient-to-br from-teal-900/40 to-cyan-900/40 rounded-2xl border border-teal-500/20 p-5">
+                <h3 className="font-bold text-teal-300 mb-3 text-sm">📈 هذا الشهر</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "تم تجنبها", value: "3", sub: "إعادة تنويم" },
+                    { label: "معدل الرد", value: "87%", sub: "من المرضى" },
+                    { label: "متوسط الاستجابة", value: "45د", sub: "وقت الرد" },
+                    { label: "رضا المرضى", value: "4.8★", sub: "تقييم" },
+                  ].map((s, i) => (
+                    <div key={i} className="bg-gray-900/60 rounded-xl p-3">
+                      <p className="text-teal-300 font-bold text-lg">{s.value}</p>
+                      <p className="text-white text-xs font-medium">{s.label}</p>
+                      <p className="text-gray-500 text-xs">{s.sub}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "patients" && (
+          <div className="grid grid-cols-3 gap-6">
+            {/* Patient List with Search */}
+            <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+              <div className="p-4 border-b border-gray-800">
+                <input
+                  type="text"
+                  placeholder="🔍 بحث عن مريض..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full bg-gray-800 text-white text-sm px-4 py-2.5 rounded-xl border border-gray-700 focus:border-teal-500 focus:outline-none mb-3"
+                />
+                <div className="flex gap-2">
+                  {["الكل", "خطر", "تحذير", "مستقر"].map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setFilterStatus(f)}
+                      className={`text-xs px-3 py-1 rounded-full transition-colors ${filterStatus === f ? "bg-teal-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="divide-y divide-gray-800 overflow-y-auto" style={{ maxHeight: "500px" }}>
+                {filtered.map(p => {
+                  const sc = statusConfig[p.status];
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => setSelectedPatient(p)}
+                      className={`p-4 cursor-pointer transition-colors ${selectedPatient?.id === p.id ? "bg-teal-900/20 border-r-2 border-teal-500" : "hover:bg-gray-800/50"}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl flex items-center justify-center text-sm font-bold">
+                          {p.name[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-white text-sm">{p.name}</p>
+                          <p className="text-gray-400 text-xs truncate">{p.surgery}</p>
+                        </div>
+                        <div className={`w-2 h-2 rounded-full ${sc.dot}`}></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Patient Detail */}
+            <div className="col-span-2">
+              {selectedPatient ? (
+                <div className="flex flex-col gap-4">
+                  {/* Header Card */}
+                  <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl flex items-center justify-center text-2xl font-bold shadow-lg">
+                          {selectedPatient.name[0]}
+                        </div>
+                        <div>
+                          <h2 className="text-xl font-bold text-white">{selectedPatient.name}</h2>
+                          <p className="text-gray-400 text-sm">{selectedPatient.age} سنة • {selectedPatient.surgery}</p>
+                          <p className="text-gray-500 text-xs">{selectedPatient.doctor} — {selectedPatient.dept}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium ${statusConfig[selectedPatient.status].bg} ${statusConfig[selectedPatient.status].text} ${statusConfig[selectedPatient.status].border}`}>
+                          <div className={`w-2 h-2 rounded-full ${statusConfig[selectedPatient.status].dot}`}></div>
+                          {selectedPatient.status}
+                        </div>
+                        <span className={`text-xs px-3 py-1 rounded-full ${riskConfig[selectedPatient.risk]}`}>
+                          خطورة {selectedPatient.risk}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Vitals */}
+                    <div className="grid grid-cols-4 gap-3">
+                      {[
+                        { label: "الألم", value: `${selectedPatient.vitals.pain}/10`, icon: "😣", color: selectedPatient.vitals.pain > 6 ? "text-red-400" : "text-amber-400" },
+                        { label: "الحرارة", value: `${selectedPatient.vitals.fever}°م`, icon: "🌡️", color: selectedPatient.vitals.fever > 38 ? "text-red-400" : "text-emerald-400" },
+                        { label: "الجرح", value: selectedPatient.vitals.wound, icon: "🩹", color: "text-blue-400" },
+                        { label: "الحركة", value: selectedPatient.vitals.mobility, icon: "🚶", color: "text-purple-400" },
+                      ].map((v, i) => (
+                        <div key={i} className="bg-gray-800 rounded-xl p-3 text-center">
+                          <span className="text-xl">{v.icon}</span>
+                          <p className={`font-bold text-sm mt-1 ${v.color}`}>{v.value}</p>
+                          <p className="text-gray-500 text-xs">{v.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Alerts */}
+                  {selectedPatient.alerts.length > 0 && (
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
+                      <p className="text-red-400 font-semibold text-sm mb-2">🚨 تنبيهات نشطة</p>
+                      {selectedPatient.alerts.map((a, i) => (
+                        <div key={i} className="flex items-center gap-2 text-red-300 text-sm">
+                          <div className="w-1.5 h-1.5 bg-red-400 rounded-full"></div>
+                          {a}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Timeline + Questions */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
+                      <h3 className="font-bold text-white text-sm mb-4">📅 مسار المتابعة</h3>
+                      <div className="flex flex-col gap-3">
+                        {selectedPatient.timeline.map((t, i) => (
+                          <div key={i} className="flex items-start gap-3">
+                            <div className="flex flex-col items-center">
+                              <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center text-sm">{t.status}</div>
+                              {i < selectedPatient.timeline.length - 1 && <div className="w-0.5 h-6 bg-gray-700 mt-1"></div>}
+                            </div>
+                            <div className="flex-1 pt-1">
+                              <p className="text-gray-400 text-xs font-medium">اليوم {t.day}</p>
+                              <p className="text-white text-xs">{t.note}</p>
+                            </div>
+                          </div>
+                        ))}
+                        <div className="flex items-start gap-3 opacity-40">
+                          <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center text-sm border border-dashed border-gray-600">⏳</div>
+                          <div className="flex-1 pt-1">
+                            <p className="text-gray-500 text-xs">اليوم 30 — إنهاء المتابعة</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
+                      <h3 className="font-bold text-white text-sm mb-4">❓ أسئلة اليوم {selectedPatient.day}</h3>
+                      <div className="flex flex-col gap-2">
+                        {(questions[selectedPatient.day] || questions[1]).map((q, i) => (
+                          <div key={i} className="bg-gray-800 rounded-xl p-3 text-xs text-gray-300 flex gap-2">
+                            <span className="text-teal-400 font-bold shrink-0">{i + 1}.</span>
+                            {q}
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setShowSendModal(true)}
+                        className="w-full mt-4 bg-teal-600 hover:bg-teal-700 text-white text-sm py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+                      >
+                        <span>📤</span>
+                        إرسال عبر واتساب
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-900 rounded-2xl border border-gray-800 flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <p className="text-4xl mb-3">👆</p>
+                    <p className="text-gray-400">اختر مريضاً لعرض تفاصيله</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "messages" && (
+          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+            <h2 className="font-bold text-white text-lg mb-6">💬 نماذج رسائل المتابعة</h2>
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                {
+                  title: "اليوم الأول",
+                  tag: "يوم 1",
+                  color: "border-blue-500/30 bg-blue-500/5",
+                  msg: `السلام عليكم [اسم المريض] 🌟\n\nنتمنى لك الشفاء العاجل بعد عملية [نوع العملية].\n\nللتأكد من سلامتك، نرجو الإجابة:\n\n1️⃣ هل تشعر بألم شديد؟ (1-10)\n2️⃣ هل درجة حرارتك طبيعية؟\n3️⃣ هل تستطيع التنفس بشكل جيد؟\n\n⚠️ في حال الطوارئ اتصل فوراً بـ 911\n\n— فريق مبادرة أمان`
+                },
+                {
+                  title: "اليوم الثالث",
+                  tag: "يوم 3",
+                  color: "border-teal-500/30 bg-teal-500/5",
+                  msg: `مرحباً [اسم المريض] 👋\n\nاليوم الثالث بعد العملية — كيف حالك؟\n\n1️⃣ هل لاحظت تورماً أو احمراراً في الجرح؟\n2️⃣ هل تتناول الأدوية كما وصف الطبيب؟\n3️⃣ هل يتحسن الألم مقارنة بالأمس؟\n\nفريقنا يتابعك باستمرار ❤️\n\n— فريق مبادرة أمان`
+                },
+                {
+                  title: "التنبيه العاجل",
+                  tag: "طارئ 🔴",
+                  color: "border-red-500/30 bg-red-500/5",
+                  msg: `عزيزي [اسم المريض] 🚨\n\nلاحظنا عدم ردك منذ فترة.\n\nللتأكد من سلامتك نرجو الرد فوراً، أو الاتصال بنا:\n\n📞 الطوارئ الطبية: 920000000\n\nأو أخبر أحد أفراد عائلتك للتواصل معنا.\n\nصحتك أولويتنا 💙`
+                },
+              ].map((m, i) => (
+                <div key={i} className={`rounded-2xl border p-5 ${m.color}`}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-xs bg-gray-800 px-3 py-1 rounded-full text-gray-300">{m.tag}</span>
+                    <h3 className="font-semibold text-white text-sm">{m.title}</h3>
+                  </div>
+                  <div className="bg-gray-900 rounded-xl p-4 text-xs text-gray-300 leading-relaxed whitespace-pre-line font-mono" style={{ direction: "rtl" }}>
+                    {m.msg}
+                  </div>
+                  <button className="w-full mt-3 bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 rounded-lg transition-colors">
+                    📋 نسخ الرسالة
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "reports" && (
+          <div className="flex flex-col gap-6">
+            <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="font-bold text-white text-lg">📋 تقرير مبادرة أمان — شهر مارس 2026</h2>
+                <button className="bg-teal-600 hover:bg-teal-700 text-white text-sm px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                  <span>⬇️</span> تصدير PDF
+                </button>
+              </div>
+              <div className="grid grid-cols-4 gap-4 mb-6">
+                {[
+                  { label: "مرضى تم متابعتهم", value: "47", icon: "👥", trend: "+12%" },
+                  { label: "إعادة تنويم تم تجنبها", value: "8", icon: "🏥", trend: "-23%" },
+                  { label: "تنبيهات مبكرة", value: "15", icon: "⚠️", trend: "اكتُشفت مبكراً" },
+                  { label: "توفير تقديري", value: "120,000 ريال", icon: "💰", trend: "للمنشأة" },
+                ].map((s, i) => (
+                  <div key={i} className="bg-gray-800 rounded-xl p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-2xl">{s.icon}</span>
+                      <span className="text-xs text-teal-400 bg-teal-400/10 px-2 py-0.5 rounded-full">{s.trend}</span>
+                    </div>
+                    <p className="text-2xl font-bold text-white">{s.value}</p>
+                    <p className="text-gray-400 text-xs mt-1">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl p-4">
+                <p className="text-teal-300 font-semibold text-sm mb-1">🎯 الأثر المباشر للمبادرة</p>
+                <p className="text-gray-300 text-sm leading-relaxed">
+                  خلال شهر واحد، استطاعت مبادرة أمان تجنب 8 حالات إعادة تنويم مكلفة، وكشف 15 حالة مضاعفات في مراحل مبكرة قابلة للعلاج بدون دخول المستشفى. الوفر التقديري للمنشأة الشريكة يتجاوز 120,000 ريال شهرياً.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Send Modal */}
+      {showSendModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md" dir="rtl">
+            <h3 className="font-bold text-white text-lg mb-4">📤 إرسال رسالة متابعة</h3>
+            <div className="bg-gray-800 rounded-xl p-4 mb-4">
+              <p className="text-xs text-gray-400 mb-2">المرضى المستهدفون:</p>
+              <div className="flex flex-wrap gap-2">
+                {patients.map(p => (
+                  <span key={p.id} className="text-xs bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-1 rounded-lg">
+                    {p.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="bg-gray-800 rounded-xl p-4 mb-4 text-xs text-gray-300 leading-relaxed">
+              <p className="text-gray-400 mb-2">نموذج الرسالة:</p>
+              السلام عليكم [اسم المريض] 🌟<br />
+              نتمنى لك الشفاء العاجل. لمتابعة حالتك نرجو الإجابة على أسئلتنا اليومية عبر هذا الرابط...<br /><br />
+              — فريق مبادرة أمان
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleSendFollowup}
+                className="flex-1 bg-teal-600 hover:bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm transition-colors"
+              >
+                ✅ إرسال الآن
+              </button>
+              <button
+                onClick={() => setShowSendModal(false)}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl font-medium text-sm transition-colors"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Toast */}
+      {sentSuccess && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-50">
+          <span>✅</span>
+          <span className="font-medium text-sm">تم إرسال رسائل المتابعة بنجاح لـ 4 مرضى</span>
+        </div>
+      )}
+    </div>
+  );
+}
