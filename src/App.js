@@ -79,6 +79,20 @@ export default function App() {
   const showToast = (m) => { setToast(m); setTimeout(() => setToast(""), 3000); };
   const fc = (k,v) => setForm(f => ({ ...f, [k]:v }));
 
+  const sendWhatsApp = (patient, msgType) => {
+    const msgs = {
+      "يوم1": `السلام عليكم ${patient.name} 🌟\n\nنتمنى لك الشفاء العاجل بعد عملية ${patient.surgery}.\n\nللتأكد من سلامتك، نرجو الإجابة:\n\n1️⃣ هل تشعر بألم شديد؟ (من 1 إلى 10)\n2️⃣ هل درجة حرارتك طبيعية؟\n3️⃣ هل تستطيع التنفس بشكل جيد؟\n\n⚠️ في حال الطوارئ اتصل فوراً بـ 911\n\n— فريق مبادرة أمان`,
+      "يوم3": `مرحباً ${patient.name} 👋\n\nاليوم الثالث بعد عملية ${patient.surgery} — كيف حالك؟\n\n1️⃣ هل لاحظت تورماً أو احمراراً في الجرح؟\n2️⃣ هل تتناول الأدوية كما وصف ${patient.doctor}؟\n3️⃣ هل يتحسن الألم مقارنة بالأمس؟\n\nفريقنا يتابعك باستمرار ❤️\n\n— فريق مبادرة أمان`,
+      "يوم7": `مرحباً ${patient.name} 🌟\n\nاليوم السابع بعد العملية — نتمنى أنك بخير!\n\n1️⃣ كيف تصف حالتك العامة اليوم؟\n2️⃣ هل الجرح يلتئم بشكل جيد؟\n3️⃣ هل لديك أي استفسار للطبيب ${patient.doctor}؟\n\n— فريق مبادرة أمان`,
+      "طارئ": `عزيزي ${patient.name} 🚨\n\nلاحظنا عدم ردك منذ فترة.\n\nنرجو الرد فوراً أو الاتصال بنا:\n📞 الطوارئ: 920000000\n\nأو أخبر أحد أفراد عائلتك للتواصل معنا.\n\nصحتك أولويتنا 💙\n\n— فريق مبادرة أمان`,
+    };
+    const msg = msgs[msgType] || msgs["يوم1"];
+    const phone = patient.phone.startsWith("0") ? "966" + patient.phone.slice(1) : patient.phone;
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank");
+    showToast(`📱 فُتح واتساب لـ ${patient.name}`);
+  };
+
   const stats = {
     total:   patients.length,
     stable:  patients.filter(p=>p.status==="مستقر").length,
@@ -340,8 +354,25 @@ export default function App() {
                           </div>
                         ))}
                       </div>
-                      {/* status update */}
+                      {/* whatsapp */}
                       <div style={{ borderTop:"1px solid #1f2937", paddingTop:14 }}>
+                        <div style={{ fontSize:12, color:"#6b7280", marginBottom:8 }}>📱 إرسال رسالة واتساب:</div>
+                        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                          {[
+                            { l:"يوم 1",   k:"يوم1",  bg:"#1d4ed8" },
+                            { l:"يوم 3",   k:"يوم3",  bg:"#0d9488" },
+                            { l:"يوم 7",   k:"يوم7",  bg:"#7c3aed" },
+                            { l:"🚨 طارئ", k:"طارئ",  bg:"#dc2626" },
+                          ].map((m,i)=>(
+                            <button key={i} onClick={()=>sendWhatsApp(sel2, m.k)}
+                              style={{ ...btn(m.bg), padding:"7px 14px", fontSize:12 }}>
+                              💬 {m.l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* status update */}
+                      <div style={{ borderTop:"1px solid #1f2937", paddingTop:14, marginTop:14 }}>
                         <div style={{ fontSize:12, color:"#6b7280", marginBottom:8 }}>تحديث الحالة:</div>
                         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                           {["مستقر","تحذير","خطر","جديد"].map(s=>(
