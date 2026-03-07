@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/feedback.html",
+      "destination": "/feedback.html"
+    },
+    {
+      "source": "/((?!feedback\\.html).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
